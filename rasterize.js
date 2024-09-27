@@ -117,12 +117,14 @@ function setupShaders() {
     
     // define vertex shader in essl using es6 template strings
     var vShaderCode = `
-        attribute vec3 vertexPosition;
+    attribute vec3 vertexPosition;
+    uniform mat4 transformationMatrix;
 
-        void main(void) {
-            gl_Position = vec4(vertexPosition, 1.0); // use the untransformed position
-        }
-    `;
+    void main(void) {
+        gl_Position = transformationMatrix * vec4(vertexPosition, 1.0); // apply the transformation
+    }
+`;
+
     
     try {
         // console.log("fragment shader: "+fShaderCode);
@@ -178,6 +180,25 @@ function renderTriangles() {
     gl.drawElements(gl.TRIANGLES, triBufferSize, gl.UNSIGNED_SHORT, 0); // Render indexed triangles
 } // end render triangles
 
+//added this function
+function setupTransformationMatrix() {
+    // Orthographic projection matrix: maps world coordinates to normalized device coordinates
+    var orthoMatrix = mat4.create();
+    mat4.ortho(orthoMatrix, 0, 1, 0, 1, 0.1, 100); // left, right, bottom, top, near, far
+
+    // View matrix: Translate the scene to be visible
+    var viewMatrix = mat4.create();
+    mat4.translate(viewMatrix, viewMatrix, [0.0, 0.0, -1.0]); // move the scene backward
+
+    // Combine the orthographic and view matrices
+    var transformationMatrix = mat4.create();
+    mat4.multiply(transformationMatrix, orthoMatrix, viewMatrix);
+
+    // Pass the transformation matrix to the vertex shader
+    var transformationMatrixLocation = gl.getUniformLocation(shaderProgram, "transformationMatrix");
+    gl.uniformMatrix4fv(transformationMatrixLocation, false, transformationMatrix);
+}
+
 
 /* MAIN -- HERE is where execution begins after window load */
 
@@ -186,6 +207,8 @@ function main() {
   setupWebGL(); // set up the webGL environment
   loadTriangles(); // load in the triangles from tri file
   setupShaders(); // setup the webGL shaders
+    //adding this one function call below
+  setupTransformationMatrix(); // apply the transformation matrix to position the shapes
   renderTriangles(); // draw the triangles using webGL
   
 } // end main
