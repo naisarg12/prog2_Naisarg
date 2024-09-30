@@ -217,10 +217,18 @@ function renderTriangles() {
 /* MAIN -- HERE is where execution begins after window load */
 
 function main() {
+
+  window.addEventListener("keydown", function(event) {
+        if (event.code === "Space") {
+            // Once the spacebar is pressed, the image will be drawn
+            setupWebGL(); // set up the webGL environment
+            loadTriangles(); // load in the triangles from tri file
+            setupShaders(); // setup the webGL shaders
+            renderTriangles(); // draw the triangles using webGL
+            // we can call other draw functions similarly if needed
+        }
+    });
+    
   
-  setupWebGL(); // set up the webGL environment
-  loadTriangles(); // load in the triangles from tri file
-  setupShaders(); // setup the webGL shaders
-  renderTriangles(); // draw the triangles using webGL
   
 } // end main
