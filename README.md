@@ -1,2 +1,2 @@
 # prog2
-helper files for the intro cg class's second programming assignment
+Code files and the necessary files for the program 2 of WebGL.
