@@ -75,71 +75,91 @@ function loadTriangles() {
         var whichSetVert; // index of vertex in current triangle set
         var whichSetTri; // index of triangle in current triangle set
         var coordArray = []; // 1D array of vertex coords for WebGL
+        var colorArray = []; // 1D array of vertex colors for WebGL
         var indexArray = []; // 1D array of vertex indices for WebGL
         var vtxBufferSize = 0; // the number of vertices in the vertex buffer
         var vtxToAdd = []; // vtx coords to add to the coord array
         var indexOffset = vec3.create(); // the index offset for the current set
         var triToAdd = vec3.create(); // tri indices to add to the index array
         
+        // Define colors for the three triangles
+        var colors = [
+            [1.0, 0.0, 0.0], // Red for the first triangle
+            [0.0, 1.0, 0.0], // Green for the second triangle
+            [0.0, 0.0, 1.0]  // Blue for the third triangle
+        ];
+
         for (var whichSet=0; whichSet<inputTriangles.length; whichSet++) {
             vec3.set(indexOffset,vtxBufferSize,vtxBufferSize,vtxBufferSize); // update vertex offset
             
-            // set up the vertex coord array
+            // set up the vertex coord and color arrays
             for (whichSetVert=0; whichSetVert<inputTriangles[whichSet].vertices.length; whichSetVert++) {
                 vtxToAdd = inputTriangles[whichSet].vertices[whichSetVert];
                 coordArray.push(vtxToAdd[0],vtxToAdd[1],vtxToAdd[2]);
-            } // end for vertices in set
+
+                // Assign a different color for each triangle
+                colorArray.push(colors[whichSet][0], colors[whichSet][1], colors[whichSet][2]);
+            }
             
             // set up the triangle index array, adjusting indices across sets
             for (whichSetTri=0; whichSetTri<inputTriangles[whichSet].triangles.length; whichSetTri++) {
                 vec3.add(triToAdd,indexOffset,inputTriangles[whichSet].triangles[whichSetTri]);
                 indexArray.push(triToAdd[0],triToAdd[1],triToAdd[2]);
-            } // end for triangles in set
+            }
 
             vtxBufferSize += inputTriangles[whichSet].vertices.length; // total number of vertices
             triBufferSize += inputTriangles[whichSet].triangles.length; // total number of tris
-        } // end for each triangle set 
+        }
         triBufferSize *= 3; // now total number of indices
 
-        // send the vertex coords to webGL
-        vertexBuffer = gl.createBuffer(); // init empty vertex coord buffer
-        gl.bindBuffer(gl.ARRAY_BUFFER,vertexBuffer); // activate that buffer
-        gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(coordArray),gl.STATIC_DRAW); // coords to that buffer
-        
-        // send the triangle indices to webGL
-        triangleBuffer = gl.createBuffer(); // init empty triangle index buffer
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, triangleBuffer); // activate that buffer
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(indexArray),gl.STATIC_DRAW); // indices to that buffer
+        // Send the vertex coordinates to WebGL
+        vertexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER,vertexBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(coordArray),gl.STATIC_DRAW);
 
-    } // end if triangles found
-} // end load triangles
+        // Send the vertex colors to WebGL
+        colorBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colorArray), gl.STATIC_DRAW);
+        
+        // Send the triangle indices to WebGL
+        triangleBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, triangleBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(indexArray),gl.STATIC_DRAW);
+    }
+}
+
 
 // setup the webGL shaders
 function setupShaders() {
-    
-    // define fragment shader in essl using es6 template strings
+
+    // Define fragment shader in ESSL using template strings
     var fShaderCode = `
+        precision mediump float;
+        varying vec3 fragColor; // color passed from the vertex shader
+
         void main(void) {
-            gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0); // all fragments are white
+            gl_FragColor = vec4(fragColor, 1.0); // set fragment color from vertex
         }
     `;
     
-    // define vertex shader in essl using es6 template strings
+    // Define vertex shader in ESSL using template strings
     var vShaderCode = `
         attribute vec3 vertexPosition;
+        attribute vec3 vertexColor; // color attribute for each vertex
+        varying vec3 fragColor; // pass color to fragment shader
 
         void main(void) {
-            gl_Position = vec4(vertexPosition, 1.0); // use the untransformed position
+            fragColor = vertexColor; // pass the color to the fragment shader
+            gl_Position = vec4(vertexPosition, 1.0); // position of vertex
         }
     `;
     
     try {
-        // console.log("fragment shader: "+fShaderCode);
         var fShader = gl.createShader(gl.FRAGMENT_SHADER); // create frag shader
         gl.shaderSource(fShader,fShaderCode); // attach code to shader
         gl.compileShader(fShader); // compile the code for gpu execution
 
-        // console.log("vertex shader: "+vShaderCode);
         var vShader = gl.createShader(gl.VERTEX_SHADER); // create vertex shader
         gl.shaderSource(vShader,vShaderCode); // attach code to shader
         gl.compileShader(vShader); // compile the code for gpu execution
@@ -160,30 +180,38 @@ function setupShaders() {
                 throw "error during shader program linking: " + gl.getProgramInfoLog(shaderProgram);
             } else { // no shader program link errors
                 gl.useProgram(shaderProgram); // activate shader program (frag and vert)
-                vertexPositionAttrib = // get pointer to vertex shader input
-                    gl.getAttribLocation(shaderProgram, "vertexPosition"); 
+                
+                // Get the location of the vertex position attribute
+                vertexPositionAttrib = gl.getAttribLocation(shaderProgram, "vertexPosition"); 
                 gl.enableVertexAttribArray(vertexPositionAttrib); // input to shader from array
-            } // end if no shader program link errors
-        } // end if no compile errors
-    } // end try 
-    
-    catch(e) {
+                
+                // Get the location of the vertex color attribute
+                vertexColorAttrib = gl.getAttribLocation(shaderProgram, "vertexColor");
+                gl.enableVertexAttribArray(vertexColorAttrib); // input color to shader
+            }
+        }
+    } catch(e) {
         console.log(e);
-    } // end catch
-} // end setup shaders
+    }
+}
+
 
 // render the loaded model
 function renderTriangles() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); // clear frame/depth buffers
     
-    // vertex buffer: activate and feed into vertex shader
-    gl.bindBuffer(gl.ARRAY_BUFFER,vertexBuffer); // activate
-    gl.vertexAttribPointer(vertexPositionAttrib,3,gl.FLOAT,false,0,0); // feed
+    // Activate the vertex buffer and feed into the vertex shader
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+    gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0); // feed vertex positions
+    
+    // Activate the color buffer and feed into the vertex shader
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.vertexAttribPointer(vertexColorAttrib, 3, gl.FLOAT, false, 0, 0); // feed vertex colors
 
-    // triangle buffer: activate and render
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,triangleBuffer); // activate
-    gl.drawElements(gl.TRIANGLES,triBufferSize,gl.UNSIGNED_SHORT,0); // render
-} // end render triangles
+    // Activate the triangle buffer and render
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, triangleBuffer);
+    gl.drawElements(gl.TRIANGLES, triBufferSize, gl.UNSIGNED_SHORT, 0); // render triangles
+}
 
 
 /* MAIN -- HERE is where execution begins after window load */
